@@ -149,5 +149,6 @@ events: {
 
 # 参考
 
-- 
+- https://github.com/lasting-yang/frida_hook_libart
+- https://github.com/hookmaster/frida-all-in-one
 
