@@ -25,9 +25,9 @@ function hookUrl() {
 		p2 = url.indexOf('&', p1);
 		end = url.substring(p1, p2);
 		
-		url = url.replace(start, 'start=0');
-		url = url.replace(end, 'end=99999');
-		console.log("new: ", url);
+		newUrl = url.replace(start, 'start=0');
+		newUrl = newUrl.replace(end, 'end=99999');
+		console.log("new: ", newUrl);
         this.setUrl(newUrl);
     }
 	
