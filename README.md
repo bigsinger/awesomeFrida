@@ -1,8 +1,25 @@
 # 安装配置
 
+# 注入方式
+
+```
+// spawn方式
+frida -U --no-pause -f com.abc.xxx -l xxx.js
+
+// attach方式
+frida -U pid -l xxx.js
+```
+
 
 
 # 常用代码
+
+```js
+console.log(Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Throwable").$new()));//java打印堆栈
+console.log(' called from:\n' +Thread.backtrace(this.context, Backtracer.ACCURATE).map(DebugSymbol.fromAddress).join('\n') + '\n');//SO打印堆栈
+```
+
+
 
 ```js
 // 获取基地址
