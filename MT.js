@@ -158,7 +158,7 @@ function frida_Module() {
 				if(name.indexOf(".lua")!=-1){
 					console.log(
 					  "open(" +
-					  "path=\"" + Memory.readUtf8String(args[0]) + "\"" +
+					  "path=\"" + name + "\"" +
 					  ", flag=" + args[1] +
 						")"
 					);
