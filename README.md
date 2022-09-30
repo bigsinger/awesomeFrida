@@ -1,3 +1,7 @@
+说明：配合 [ADBGUI](https://github.com/bigsinger/adbgui)  工具，更加高效快捷。
+
+
+
 # 安装配置
 
 # 注入方式
