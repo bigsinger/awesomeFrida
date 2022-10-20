@@ -270,6 +270,114 @@ events: {
 })
 ```
 
+##  输出类所有方法名
+
+```js
+function enumMethods(targetClass) {
+    var ret;
+    Java.perform(function() {
+            var hook = Java.use(targetClass);
+            var ret = hook.class.getDeclaredMethods();
+            ret.forEach(function(s) {
+                console.log(s);
+            })
+    })
+    return ret;
+}
+```
+
+## HOOK所有重载函数
+
+```js
+function hookAllOverloads(targetClass, targetMethod) {
+    Java.perform(function () {
+         var targetClassMethod = targetClass + '.' + targetMethod;
+         var hook = Java.use(targetClass);
+         var overloadCount = hook[targetMethod].overloads.length;
+         for (var i = 0; i < overloadCount; i++) {
+                hook[targetMethod].overloads[i].implementation = function() {
+                     var retval = this[targetMethod].apply(this, arguments);
+                     //这里可以打印结果和参数
+                     return retval;
+                 }
+              }
+   });
+ }
+```
+
+
+
+## 获取方法名
+
+```js
+function getMethodName() {
+    var ret;
+    Java.perform(function() {
+        var Thread = Java.use("java.lang.Thread")
+        ret = Thread.currentThread().getStackTrace()[2].getMethodName();
+    });
+    return ret;
+}
+```
+
+## 免写参数
+
+```js
+var xx = Java.use("xx.xx.xx");
+xx.yy.implementation = function() {
+    var ret = this.yy.apply(this, arguments);
+    return ret;
+}
+```
+
+## Java对象、byte[]输出
+
+```js
+function jobj2Str(jobject) {
+    var ret = JSON.stringify(jobject);
+    return ret;
+}
+```
+
+
+
+##  jstring、jbytearray 输出
+
+```js
+function jstring2Str(jstring) {
+   var ret;
+   Java.perform(function() {
+       var String = Java.use("java.lang.String");
+       ret = Java.cast(jstring, String);
+   });
+   return ret;
+}
+ 
+function jbyteArray2Array(jbyteArray) {
+   var ret;
+   Java.perform(function() {
+       var b = Java.use('[B');
+       var buffer = Java.cast(jbyteArray, b);
+       ret = Java.array('byte', buffer);
+   });
+   return ret;
+}
+```
+
+## dump数据
+
+```js
+function dumpAddr(address, length) {
+    length = length || 1024;
+    console.log(hexdump(address, {
+        offset: 0,
+        length: length,
+        header: true,
+        ansi: false
+    }));
+}
+```
+
 
 
 # 参考
