@@ -20,6 +20,14 @@ function hook() {
   //   }
   // });
 
+  //
+  // var dexclassLoader = Java.use("java.lang.ClassLoader");
+  // dexclassLoader.loadClass.overload('java.lang.String').implementation = function(name){
+  //   var result = this.loadClass(name);
+  //   console.log(name);
+  //   return result;
+  // }
+
 
   var dexclassLoader = Java.use("dalvik.system.DexClassLoader");
   dexclassLoader.loadClass.overload('java.lang.String').implementation = function(name){
