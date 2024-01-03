@@ -68,4 +68,3 @@ Java.perform(function() {
         onComplete: function() {}
     });
 });
-
