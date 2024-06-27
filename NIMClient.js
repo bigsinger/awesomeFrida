@@ -1,8 +1,10 @@
 /**
 适用对象：通用
-作用：获取动态加载的类(loadClass)
+作用：通过hook NIMClient获取App中的appkey
 参考：
 */
+
+var targetClass = "com.netease.nimlib.sdk.NIMClient";
 
 function hook() {
   Java.perform(function () {
@@ -23,6 +25,10 @@ function hook() {
         }
       }
 
+      // 这里一般找不到
+      if (name === targetClass) {
+        console.log("got targetClass: ", targetClass);
+      }
       return result;
     }
 
@@ -52,6 +58,15 @@ function hook() {
 }
 
 function hookTargetClass() {
+  var cls = Java.use(targetClass);
+  if (cls) {
+    console.log(cls);
+    cls.init.implementation = function (context, loginInfo, sDKOptions) {
+      console.log(targetClass + ".init() \n\tSDKOptions: ", sDKOptions.appKey.value, sDKOptions.sdkStorageRootPath.value);
+      printStack();
+      return this.init(context, loginInfo, sDKOptions);
+    }
+  }
 }
 
 // 打印堆栈
