@@ -329,12 +329,6 @@ for(var j=0; j < methods.length; j++){
         }
     }
 }
-
-
-var Demo = Java.use("com.xxx.Demo");
-//getDeclaredMethods枚举所有方法
-var methods = Demo.class.getDeclaredMethods();
-
 ```
 
 ### 保存数据到文件
