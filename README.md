@@ -6,19 +6,53 @@
 
 # 注入方式
 
-```
-// spawn方式
+```bash
+# spawn方式
 frida -U --no-pause -f com.abc.xxx -l xxx.js
 
-// attach方式
+# attach方式
 frida -U pid -l xxx.js
+```
+
+
+
+# 基础语法
+
+| API名称                                    | 描述                                           |
+| :----------------------------------------- | :--------------------------------------------- |
+| `Java.use(className)`                      | 获取指定的Java类并使其在JavaScript代码中可用。 |
+| `Java.perform(callback)`                   | 确保回调函数在Java的主线程上执行。             |
+| `Java.choose(className, callbacks)`        | 枚举指定类的所有实例。                         |
+| `Java.cast(obj, cls)`                      | 将一个Java对象转换成另一个Java类的实例。       |
+| `Java.enumerateLoadedClasses(callbacks)`   | 枚举进程中已经加载的所有Java类。               |
+| `Java.enumerateClassLoaders(callbacks)`    | 枚举进程中存在的所有Java类加载器。             |
+| `Java.enumerateMethods(targetClassMethod)` | 枚举指定类的所有方法。                         |
+
+## 日志输出
+
+| 日志方法        | 描述                                                | 说明                                                         |
+| :-------------- | :-------------------------------------------------- | :----------------------------------------------------------- |
+| `console.log()` | 使用JavaScript直接进行日志打印                      | 多用于在CLI模式中，`console.log()`直接输出到命令行界面，使用户可以实时查看。在RPC模式中，`console.log()`同样输出在命令行，但可能被Python脚本的输出内容掩盖。 |
+| `send()`        | Frida的专有方法，用于发送数据或日志到外部Python脚本 | 多用于RPC模式中，它允许JavaScript脚本发送数据到Python脚本，Python脚本可以进一步处理或记录这些数据。 |
+
+## 模板代码
+
+```js
+function main(){
+    Java.perform(function(){
+        hook();
+    });
+}
+setImmediate(main);
 ```
 
 
 
 # 常用代码
 
-## 打印堆栈
+## Java层
+
+### 打印堆栈
 
 ```js
 console.log(Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Throwable").$new()));//java打印堆栈
@@ -103,7 +137,247 @@ function main() {
 setImmediate(main)
 ```
 
-## fopen
+### 字节序列转字符串
+
+```js
+let s = String.fromCharCode.apply(null, bytes);	// 字节序列转字符串
+```
+
+### Java对象、byte[]输出
+
+```js
+function jobj2Str(jobject) {
+    var ret = JSON.stringify(jobject);
+    return ret;
+}
+```
+
+###  jstring、jbytearray 输出
+
+```js
+function jstring2Str(jstring) {
+   var ret;
+   Java.perform(function() {
+       var String = Java.use("java.lang.String");
+       ret = Java.cast(jstring, String);
+   });
+   return ret;
+}
+ 
+function jbyteArray2Array(jbyteArray) {
+   var ret;
+   Java.perform(function() {
+       var b = Java.use('[B');
+       var buffer = Java.cast(jbyteArray, b);
+       ret = Java.array('byte', buffer);
+   });
+   return ret;
+}
+```
+
+### base64编码
+
+```js
+function byte2Base64(bytes) {
+    var jBase64 = Java.use('android.util.Base64');
+    return jBase64.encodeToString(bytes, 2);
+}
+```
+
+
+
+### HOOK构造函数
+
+```js
+function hook(){
+    var utils = Java.use("com.xxx.Demo");
+    
+    // $init表示构造函数
+    utils.$init.overload('java.lang.String').implementation = function(str){
+        console.log(str);
+        this.$init(str);
+    }
+}
+```
+
+### HOOK所有重载函数
+
+```js
+function hookAllOverloads(targetClass, targetMethod) {
+    Java.perform(function () {
+         var targetClassMethod = targetClass + '.' + targetMethod;
+         var hook = Java.use(targetClass);
+         var overloadCount = hook[targetMethod].overloads.length;
+         for (var i = 0; i < overloadCount; i++) {
+                hook[targetMethod].overloads[i].implementation = function() {
+                     var retval = this[targetMethod].apply(this, arguments);
+                     //这里可以打印结果和参数
+                     return retval;
+                 }
+              }
+   });
+ }
+```
+
+### HOOK内部类
+
+```js
+function hook(){
+    Java.perform(function(){
+        var innerClass = Java.use("com.xxx.Demo$innerClass");
+        console.log(innerClass);
+        innerClass.$init.implementation = function(){
+            console.log("内部类");
+        }
+    });
+}
+```
+
+
+
+### 修改成员变量
+
+```js
+function hook(){
+    Java.perform(function(){
+        
+        // 修改静态成员变量
+        var cls = Java.use("com.xxx.Demo");
+        cls.staticField.value = "hello";
+        console.log(cls.staticField.value);
+        
+        //非静态字段的修改。 使用`Java.choose()`枚举类的所有实例
+        Java.choose("com.xxx.Demo", {
+            onMatch: function(obj){
+                obj._privateInt.value = "hello";
+                obj.privateInt.value = 123456;
+            },
+            onComplete: function(){
+            }
+        });
+    });
+}
+```
+
+
+
+### 调用成员函数
+
+```js
+// 调用静态函数
+var cls=Java.use("com.xxx.Demo"); 
+cls.func("args");
+
+// 调用非静态成员函数
+Java.choose("com.xxx.Demo", {
+    onMatch:function(obj){
+        var ret = obj.func("args");
+    },
+    onComplete:function() {
+    }
+});
+
+// 调用jni函数
+function invoke(str){
+    Java.perform(function (){
+        var javaString = Java.use('java.lang.String').$new(str)
+        var result = Java.use("com.xxx.MainActivity").encodeFromJni_70(javaString);
+        console.log("result is => ",result)
+    })
+}
+```
+
+### 获取所有加载的类
+
+```js
+
+// 异步枚举所有的类与类的所有方法
+Java.enumerateLoadedClasses({
+    onMatch: function(name, handle) {
+        console.log(name);
+        if(name.indexOf("com.xxx.Demo") !=-1){
+            console.log(name);
+            var clazz = Java.use(name);
+            console.log(clazz);
+            var methods = clazz.class.getDeclaredMethods();
+            console.log(methods);
+        }
+    },
+    onComplete: function(){}
+})
+
+```
+
+###  获取类所有方法
+
+```js
+var cls = Java.use(targetClass);
+var methods = cls.class.getDeclaredMethods();
+methods.forEach(function(s) {
+    console.log(s);
+})
+
+for(var j=0; j < methods.length; j++){
+    var methodName = methods[j].getName();
+    console.log(methodName);
+    for(var k=0; k<Demo[methodName].overloads.length;k++){
+        Demo[methodName].overloads[k].implementation = function(){
+            for(var i=0;i<arguments.length;i++){
+                console.log(arguments[i]);
+            }
+            return this[methodName].apply(this,arguments);
+        }
+    }
+}
+
+
+var Demo = Java.use("com.xxx.Demo");
+//getDeclaredMethods枚举所有方法
+var methods = Demo.class.getDeclaredMethods();
+
+```
+
+### 保存数据到文件
+
+```js
+// 字节序列保存到文件中
+function save2File(filename, byteArr){
+	console.log("save file to: " + filename);
+	var file = new File(filename, "w");
+	file.write(byteArr);
+	file.flush();
+	file.close();
+}
+```
+
+### 获取方法名
+
+```js
+function getMethodName() {
+    var ret;
+    Java.perform(function() {
+        var Thread = Java.use("java.lang.Thread")
+        ret = Thread.currentThread().getStackTrace()[2].getMethodName();
+    });
+    return ret;
+}
+```
+
+### 免写参数
+
+```js
+var xx = Java.use("xx.xx.xx");
+xx.yy.implementation = function() {
+    var ret = this.yy.apply(this, arguments);
+    return ret;
+}
+```
+
+
+
+## Native层
+
+### fopen
 
 ```js
 Interceptor.attach(Module.findExportByName("libc.so" , "open"),{
@@ -122,7 +396,7 @@ Interceptor.attach(Module.findExportByName("libc.so" , "open"),{
 });
 ```
 
-## 拦截模块加载并hook
+### 拦截模块加载并hook
 
 ```js
 var android_dlopen_ext = Module.findExportByName(null, "android_dlopen_ext");
@@ -147,40 +421,14 @@ if(android_dlopen_ext != null){
 
 
 
-## 获取模块基址
+### 获取模块基址
 
 ```js
 // 获取基地址
 var baseAddr = Module.findBaseAddress("libnative-lib.so")
 ```
 
-## 调用jni函数
-
-```js
-// 调用jni函数
-function invoke(str){
-    Java.perform(function (){
-        var javaString = Java.use('java.lang.String').$new(str)
-        var result = Java.use("com.xxx.yyy.MainActivity").encodeFromJni_70(javaString);
-        console.log("result is => ",result)
-    })
-}
-```
-
-## 保存数据到文件
-
-```js
-// 字节序列保存到文件中
-function save2File(filename, byteArr){
-	console.log("save file to: " + filename);
-	var file = new File(filename, "w");
-	file.write(byteArr);
-	file.flush();
-	file.close();
-}
-```
-
-## luaL_loadbuffer
+### luaL_loadbuffer
 
 ```js
 //luaL_loadbuffer 加载lua文件函数 libcocos2dlua.so
@@ -225,7 +473,7 @@ function printDataHexStr(byteArr, size){
 
 
 
-## 获取模块所有导出函数
+### 获取模块所有导出函数
 
 ```js
 // 获取所有导出函数
@@ -235,7 +483,7 @@ symbols.forEach(function (item) {
 })
 ```
 
-## 实时跟踪cpu指令
+### 实时跟踪CPU指令
 
 ```js
 // 实时跟踪cpu指令
@@ -270,101 +518,7 @@ events: {
 })
 ```
 
-##  输出类所有方法名
-
-```js
-function enumMethods(targetClass) {
-    var ret;
-    Java.perform(function() {
-            var hook = Java.use(targetClass);
-            var ret = hook.class.getDeclaredMethods();
-            ret.forEach(function(s) {
-                console.log(s);
-            })
-    })
-    return ret;
-}
-```
-
-## HOOK所有重载函数
-
-```js
-function hookAllOverloads(targetClass, targetMethod) {
-    Java.perform(function () {
-         var targetClassMethod = targetClass + '.' + targetMethod;
-         var hook = Java.use(targetClass);
-         var overloadCount = hook[targetMethod].overloads.length;
-         for (var i = 0; i < overloadCount; i++) {
-                hook[targetMethod].overloads[i].implementation = function() {
-                     var retval = this[targetMethod].apply(this, arguments);
-                     //这里可以打印结果和参数
-                     return retval;
-                 }
-              }
-   });
- }
-```
-
-
-
-## 获取方法名
-
-```js
-function getMethodName() {
-    var ret;
-    Java.perform(function() {
-        var Thread = Java.use("java.lang.Thread")
-        ret = Thread.currentThread().getStackTrace()[2].getMethodName();
-    });
-    return ret;
-}
-```
-
-## 免写参数
-
-```js
-var xx = Java.use("xx.xx.xx");
-xx.yy.implementation = function() {
-    var ret = this.yy.apply(this, arguments);
-    return ret;
-}
-```
-
-## Java对象、byte[]输出
-
-```js
-function jobj2Str(jobject) {
-    var ret = JSON.stringify(jobject);
-    return ret;
-}
-```
-
-
-
-##  jstring、jbytearray 输出
-
-```js
-function jstring2Str(jstring) {
-   var ret;
-   Java.perform(function() {
-       var String = Java.use("java.lang.String");
-       ret = Java.cast(jstring, String);
-   });
-   return ret;
-}
- 
-function jbyteArray2Array(jbyteArray) {
-   var ret;
-   Java.perform(function() {
-       var b = Java.use('[B');
-       var buffer = Java.cast(jbyteArray, b);
-       ret = Java.array('byte', buffer);
-   });
-   return ret;
-}
-```
-
-## dump数据
+### DUMP数据
 
 ```js
 function dumpAddr(address, length) {
@@ -378,7 +532,7 @@ function dumpAddr(address, length) {
 }
 ```
 
-
+## 
 
 # 参考
 
