@@ -1,10 +1,55 @@
+
+var targetLib = 'libxyz.so';
+
+
+function hook_NativeMethodByRegister(fnName) {
+    var symbols = Module.enumerateSymbolsSync("libart.so");
+    var addrRegisterNatives = null;
+    for (var i = 0; i < symbols.length; i++) {
+        var symbol = symbols[i];
+
+        //_ZN3art3JNI15RegisterNativesEP7_JNIEnvP7_jclassPK15JNINativeMethodi
+        if (symbol.name.indexOf("art") >= 0 &&
+            symbol.name.indexOf("JNI") >= 0 &&
+            symbol.name.indexOf("RegisterNatives") >= 0 &&
+            symbol.name.indexOf("CheckJNI") < 0) {
+            addrRegisterNatives = symbol.address;
+        }
+    }
+
+    if (addrRegisterNatives != null) {
+        Interceptor.attach(addrRegisterNatives, {
+            onEnter: function (args) {
+                var methods_ptr = ptr(args[2]);
+                var method_count = parseInt(args[3]);
+                for (var i = 0; i < method_count; i++) {
+                    var name_ptr = Memory.readPointer(methods_ptr.add(i * Process.pointerSize * 3));
+                    var fnPtr_ptr = Memory.readPointer(methods_ptr.add(i * Process.pointerSize * 3 + Process.pointerSize * 2));
+                    var methodName = Memory.readCString(name_ptr);
+                    if (methodName == fnName) {
+                        console.log(methodName, fnPtr_ptr);
+                        printStack();
+                        traceNative(null, fnPtr_ptr);
+                    }
+
+                }
+            }
+        });
+    }
+}
+
 // stalker
-function hook_14E20() {
-    var baseAddr = Module.findBaseAddress("libnative-lib.so")
-    //var symbols = Module.enumerateSymbolsSync("libart.so"); symbols.forEach(function (item) { console.log(JSON.stringify( item)) })
-    Interceptor.attach(baseAddr.add(0x14E20), {
+function traceNative(moduleName, addr) {
+    var p = addr;
+    if (moduleName) {
+        var baseAddr = Module.findBaseAddress(targetLib)
+        if (!baseAddr) { return; }
+        p = baseAddr.add(addr);
+    }
+    Interceptor.attach(p, {
         onEnter: function (args) {
-            console.log("Entering 0x14E20...")
+            console.log("Enter " + addr)
+            printStack();
             this.tid = Process.getCurrentThreadId();
 
             Stalker.follow(this.tid, {
@@ -26,7 +71,7 @@ function hook_14E20() {
                 //         try {
                 //             var addr1 = i[1];
                 //             var module1 = Process.getModuleByAddress(addr1);
-                //             if (module1 != null && module1.name == "libnative-lib.so") {
+                //             if (module1 != null && module1.name === targetLib) {
                 //                 var addr2 = i[2];
                 //                 var module2 = Process.getModuleByAddress(addr2);
                 //                 console.log("call: ", module1.name + "!" + addr1.sub(module1.base), module2.name + "!" + addr2.sub(module2.base))
@@ -42,7 +87,7 @@ function hook_14E20() {
                         const number = summary[target];
                         if (number == 1) {
                             var module = Process.findModuleByAddress(target);
-                            if (module != null && module.name == "libnative-lib.so") {
+                            if (module != null && module.name === targetLib) {
                                 console.log(module.name + "!" + ptr(target).sub(module.base));
                             }
                         }
@@ -97,25 +142,30 @@ function print_arg(addr) {
     }
 }
 
+// 打印堆栈
+function printStack() {
+    console.log(Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Exception").$new()));
+}
+
 
 function main() {
-    // hook_14E20();
-    var baseAddr = Module.findBaseAddress("libnative-lib.so");
-    hook_native_function(baseAddr.add(0x57514));
-    hook_native_function(baseAddr.add(0x5971c));
-    hook_native_function(baseAddr.add(0x157fc));
-    //hook_native_function(baseAddr.add(0xf6e0));   //free
-    hook_native_function(baseAddr.add(0x151a4));
-    hook_native_function(baseAddr.add(0x59670));
-    //hook_native_function(baseAddr.add(0xf630));   //strlen
-    hook_native_function(baseAddr.add(0x19a84));
-    hook_native_function(baseAddr.add(0x12580));
-    //hook_native_function(baseAddr.add(0xf6a0));   //memset
-    hook_native_function(baseAddr.add(0x16a94));
-    //hook_native_function(baseAddr.add(0x18540));  //短的字符串的时候无
-    hook_native_function(baseAddr.add(0xfcac));
-    hook_native_function(baseAddr.add(0x12c0c));
-    hook_native_function(baseAddr.add(0x5796c));
+    hook_NativeMethodByRegister('decode');
+    // var baseAddr = Module.findBaseAddress("libnative-lib.so");
+    // hook_native_function(baseAddr.add(0x57514));
+    // hook_native_function(baseAddr.add(0x5971c));
+    // hook_native_function(baseAddr.add(0x157fc));
+    // //hook_native_function(baseAddr.add(0xf6e0));   //free
+    // hook_native_function(baseAddr.add(0x151a4));
+    // hook_native_function(baseAddr.add(0x59670));
+    // //hook_native_function(baseAddr.add(0xf630));   //strlen
+    // hook_native_function(baseAddr.add(0x19a84));
+    // hook_native_function(baseAddr.add(0x12580));
+    // //hook_native_function(baseAddr.add(0xf6a0));   //memset
+    // hook_native_function(baseAddr.add(0x16a94));
+    // //hook_native_function(baseAddr.add(0x18540));  //短的字符串的时候无
+    // hook_native_function(baseAddr.add(0xfcac));
+    // hook_native_function(baseAddr.add(0x12c0c));
+    // hook_native_function(baseAddr.add(0x5796c));
 }
 
 
