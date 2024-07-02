@@ -143,6 +143,42 @@ setImmediate(main)
 let s = String.fromCharCode.apply(null, bytes);	// 字节序列转字符串
 ```
 
+### 字节序列打印输出
+
+```js
+// 输出显示十六进制数据
+function printDataHexStr(byteArr, size){
+	var len = size;
+	if(len==undefined){len=0x40;}
+	console.log(byteArr);
+
+/* 	var b = new Uint8Array(byteArr);
+	var str = "";
+
+	for(var i = 0; i < len; i++) {
+		str += (b[i].toString(16) + " ");
+	}
+	console.log(str); */
+}
+```
+
+
+
+### 字节序列保存到文件
+
+```js
+// 字节序列保存到文件中
+function save2File(filename, bytes){
+	console.log("save file to: " + filename);
+	var file = new File(filename, "w");
+	file.write(bytes);
+	file.flush();
+	file.close();
+}
+```
+
+
+
 ### Java对象、byte[]输出
 
 ```js
@@ -181,6 +217,33 @@ function jbyteArray2Array(jbyteArray) {
 function byte2Base64(bytes) {
     var jBase64 = Java.use('android.util.Base64');
     return jBase64.encodeToString(bytes, 2);
+}
+```
+
+### HOOK base64
+
+```js
+function hookBase64() {
+    // Base64
+    var Base64Class = Java.use("android.util.Base64");
+    Base64Class.encodeToString.overload("[B", "int").implementation = function (a, b) {
+        var rc = this.encodeToString(a, b);
+        console.log(">>> Base64 " + rc);
+        return rc;
+    }
+}
+```
+
+### HOOK HashMap
+
+```js
+function hookHashMap() {
+    var Build = Java.use("java.util.HashMap");
+    Build["put"].implementation = function (key, val) {
+        console.log("key : " + key)
+        console.log("val : " + val)
+        return this.put(key, val)
+    }
 }
 ```
 
@@ -287,6 +350,19 @@ function invoke(str){
 }
 ```
 
+### 获取动态加载的类
+
+```js
+var cls = Java.use("dalvik.system.DexClassLoader");
+cls.loadClass.overload('java.lang.String').implementation = function (name) {
+    var result = this.loadClass(name);
+    console.log(name);
+    return result;
+}
+```
+
+
+
 ### 获取所有加载的类
 
 ```js
@@ -367,6 +443,27 @@ xx.yy.implementation = function() {
 }
 ```
 
+### 主动弹出Toast
+
+```js
+// 0 = // https://developer.android.com/reference/android/widget/Toast#LENGTH_LONG
+Java.scheduleOnMainThread(() => {
+  Java.use("android.widget.Toast")
+    .makeText(Java.use("android.app.ActivityThread").currentApplication().getApplicationContext(), Java.use("java.lang.StringBuilder").$new("Text to Toast here"), 0).show();
+});
+```
+
+
+
+### 获取Webview加载的URL
+
+```js
+Java.use("android.webkit.WebView").loadUrl.overload("java.lang.String").implementation = function (s) {
+    send(s.toString());
+    this.loadUrl.overload("java.lang.String").call(this, s);
+};
+```
+
 
 
 ## Native层
@@ -410,6 +507,37 @@ if(android_dlopen_ext != null){
             };
         }
     });
+}
+```
+
+### Hook模块中的函数
+
+```js
+//getFileData
+Interceptor.attach(Module.findExportByName("libgame.so" , "_ZN7cocos2d11CCFileUtils11getFileDataEPKcS2_Pmb"),{
+    onEnter:function (args) {
+        var name = Memory.readCString(args[1]);
+        this.sizePtr = ptr(args[3]);
+        console.log("getFileData onEnter, name: " + name);
+    },
+    onLeave:function (retval) {
+    }			
+});
+```
+
+
+
+### 枚举进程模块列表
+
+```js
+var modules = Process.enumerateModules();
+for(var i = 0; i < modules.length; i++) {
+    if(modules[i].path.indexOf("libgame")!=-1) {
+        console.log("模块名称:",modules[i].name);
+        console.log("模块地址:",modules[i].base);
+        console.log("大小:",modules[i].size);
+        console.log("文件系统路径",modules[i].path);
+    }
 }
 ```
 
@@ -473,7 +601,7 @@ function printDataHexStr(byteArr, size){
 // 获取所有导出函数
 var symbols = Module.enumerateSymbolsSync("libart.so");
 symbols.forEach(function (item) {
-	console.log(JSON.stringify( item))
+	console.log(JSON.stringify(item))
 })
 ```
 
@@ -526,7 +654,48 @@ function dumpAddr(address, length) {
 }
 ```
 
-## 
+### 读取内存数据
+
+```js
+// 读取内存中的字符串
+var s = Memory.readUtf8String(addr);
+var s = Memory.readCString(addr);
+
+// 读取内存中的字节序列
+var bytes = Memory.readByteArray(addr, size)
+
+// 读取内存中的数值
+var size = Memory.readInt(addr);
+```
+
+### DUMP so文件
+
+```js
+function dump_so(so_name) {
+  Java.perform(function () {
+    var currentApplication = Java.use("android.app.ActivityThread").currentApplication();
+    var dir = currentApplication.getApplicationContext().getFilesDir().getPath();
+    var libso = Process.getModuleByName(so_name);
+    console.log("[name]:", libso.name);
+    console.log("[base]:", libso.base);
+    console.log("[size]:", ptr(libso.size));
+    console.log("[path]:", libso.path);
+    var file_path = dir + "/" + libso.name + "_" + libso.base + "_" + ptr(libso.size) + ".so";
+    var file_handle = new File(file_path, "wb");
+    if (file_handle && file_handle != null) {
+      Memory.protect(ptr(libso.base), libso.size, 'rwx');
+      var libso_buffer = ptr(libso.base).readByteArray(libso.size);
+      file_handle.write(libso_buffer);
+      file_handle.flush();
+      file_handle.close();
+      console.log("[dump]:", file_path);
+    }
+  });
+}
+setImmediate(dump_so("libshield.so"))
+```
+
+
 
 # 参考
 

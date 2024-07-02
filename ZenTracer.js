@@ -86,8 +86,8 @@ function match(ex, text) {
 if (Java.available) {
     Java.perform(function () {
         log('ZenTracer Start...');
-        var matchRegEx = {MATCHREGEX};
-        var blackRegEx = {BLACKREGEX};
+        var matchRegEx = { MATCHREGEX };
+        var blackRegEx = { BLACKREGEX };
         Java.enumerateLoadedClasses({
             onMatch: function (aClass) {
                 for (var index in matchRegEx) {

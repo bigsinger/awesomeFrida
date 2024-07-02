@@ -2,7 +2,7 @@ function hook() {
   Java.perform(function () {
     var symbols = Module.enumerateSymbolsSync("libart.so");
     symbols.forEach(function (item) {
-        console.log(JSON.stringify( item))
+        console.log(JSON.stringify(item))
     })
 
 
