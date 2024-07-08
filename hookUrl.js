@@ -84,9 +84,7 @@ function hookOkHttpClient() {
 
 // 打印堆栈
 function printStack() {
-    Java.perform(function () {
-        console.log(Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Exception").$new()));
-    });
+    console.log(Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Exception").$new()));
 }
 
 // hook Base64 
@@ -122,6 +120,6 @@ function hook() {
         //hookBase64();
         //hookHashMap();
     });
-  }
+}
 
 setImmediate(hook());
