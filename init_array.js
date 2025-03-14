@@ -1,6 +1,20 @@
 /**
-参考：[frida hook init_array自吐新解](https://blog.seeflower.dev/archives/299/)
-
+ * 参考：[frida hook init_array自吐新解](https://blog.seeflower.dev/archives/299/)
+ * 
+ * @file Frida Hook init_array 脚本
+ * @description 本脚本通过 Frida 的 CModule 模块解析 soinfo 结构体，hook call_constructors 函数以输出 init_array 信息。
+ *              适用于 Android 8 ~ 14 的 32/64 位系统，可兼容 Android 5/6/7（需根据实际情况调整）。
+ *
+ * @usage
+ *  1. 使用 Frida 进行注入，例如：
+ *     frida -U -f [目标应用包名] -l [本脚本路径] -o [输出日志文件]
+ *  2. 确保目标设备的 Frida 版本与脚本兼容。
+ *  3. 根据实际需求调整脚本中的模块名、符号地址等参数。
+ *
+ * @note
+ *  - 本脚本依赖 Frida 的 CModule 功能，确保运行环境支持该模块。
+ *  - 在不同 Android 版本或设备架构上，可能需要重新验证 soinfo 结构体的定义及符号地址。
+ *  - 输出的日志信息包含 init_array 的详细数据，可根据实际分析需求进一步处理。
  */
 
 let cm_include = `
@@ -195,67 +209,67 @@ let cm = null;
 let tell_init_info = null;
 
 function setup_cmodule() {
-	if (Process.pointerSize == 4) {
-		cm_code = cm_include + "#define __work_around_b_24465209__ 1" + cm_code;
-	} else {
-		cm_code = cm_include + "#define __LP64__ 1" + cm_code;
-	}
-	cm = new CModule(cm_code, {});
-	tell_init_info = new NativeFunction(cm.tell_init_info, "void", ["pointer", "pointer"]);
+  if (Process.pointerSize == 4) {
+    cm_code = cm_include + "#define __work_around_b_24465209__ 1" + cm_code;
+  } else {
+    cm_code = cm_include + "#define __LP64__ 1" + cm_code;
+  }
+  cm = new CModule(cm_code, {});
+  tell_init_info = new NativeFunction(cm.tell_init_info, "void", ["pointer", "pointer"]);
 }
 
 function get_addr_info(addr) {
-	let mm = new ModuleMap();
-	let info = mm.find(addr);
-	if (info == null) return "null";
-	return `[${info.name} + ${addr.sub(info.base)}]`;
+  let mm = new ModuleMap();
+  let info = mm.find(addr);
+  if (info == null) return "null";
+  return `[${info.name} + ${addr.sub(info.base)}]`;
 }
 
 function hook_call_constructors() {
-	let get_soname = null;
-	let call_constructors_addr = null;
-	let hook_call_constructors_addr = true;
+  let get_soname = null;
+  let call_constructors_addr = null;
+  let hook_call_constructors_addr = true;
 
-	let linker = null;
-	if (Process.pointerSize == 4) {
-		linker = Process.findModuleByName("linker");
-	} else {
-		linker = Process.findModuleByName("linker64");
-	}
+  let linker = null;
+  if (Process.pointerSize == 4) {
+    linker = Process.findModuleByName("linker");
+  } else {
+    linker = Process.findModuleByName("linker64");
+  }
 
-	let symbols = linker.enumerateSymbols();
-	for (let index = 0; index < symbols.length; index++) {
-		let symbol = symbols[index];
-		if (symbol.name == "__dl__ZN6soinfo17call_constructorsEv") {
-			call_constructors_addr = symbol.address;
-		} else if (symbol.name == "__dl__ZNK6soinfo10get_sonameEv") {
-			get_soname = new NativeFunction(symbol.address, "pointer", ["pointer"]);
-		}
-	}
-	if (hook_call_constructors_addr && call_constructors_addr && get_soname) {
-		Interceptor.attach(call_constructors_addr, {
-			onEnter: function (args) {
-				let soinfo = args[0];
-				let soname = get_soname(soinfo).readCString();
-				tell_init_info(soinfo, new NativeCallback((count, init_array_ptr, init_func) => {
-					console.log();
-					console.log(`[call_constructors] ${soname} count:${count}`);
-					console.log(`[call_constructors] init_array_ptr:${init_array_ptr}`);
-					console.log(`[call_constructors] init_func:${init_func} -> ${get_addr_info(init_func)}`);
-					for (let index = 0; index < count; index++) {
-						let init_array_func = init_array_ptr.add(Process.pointerSize * index).readPointer();
-						let func_info = get_addr_info(init_array_func);
-						console.log(`[call_constructors] init_array:${index} ${init_array_func} -> ${func_info}`);
-					}
-				}, "void", ["int", "pointer", "pointer"]));
-			}
-		});
-	}
+  let symbols = linker.enumerateSymbols();
+  for (let index = 0; index < symbols.length; index++) {
+    let symbol = symbols[index];
+    if (symbol.name == "__dl__ZN6soinfo17call_constructorsEv") {
+      call_constructors_addr = symbol.address;
+    } else if (symbol.name == "__dl__ZNK6soinfo10get_sonameEv") {
+      get_soname = new NativeFunction(symbol.address, "pointer", ["pointer"]);
+    }
+  }
+  if (hook_call_constructors_addr && call_constructors_addr && get_soname) {
+    Interceptor.attach(call_constructors_addr, {
+      onEnter: function (args) {
+        let soinfo = args[0];
+        let soname = get_soname(soinfo).readCString();
+        tell_init_info(soinfo, new NativeCallback((count, init_array_ptr, init_func) => {
+          console.log();
+          console.log(`[call_constructors] ${soname} count:${count}`);
+          console.log(`[call_constructors] init_array_ptr:${init_array_ptr}`);
+          console.log(`[call_constructors] init_func:${init_func} -> ${get_addr_info(init_func)}`);
+          for (let index = 0; index < count; index++) {
+            let init_array_func = init_array_ptr.add(Process.pointerSize * index).readPointer();
+            let func_info = get_addr_info(init_array_func);
+            console.log(`[call_constructors] init_array:${index} ${init_array_func} -> ${func_info}`);
+          }
+        }, "void", ["int", "pointer", "pointer"]));
+      }
+    });
+  }
 }
 
 function main() {
-	setup_cmodule();
-	hook_call_constructors();
+  setup_cmodule();
+  hook_call_constructors();
 }
 
 setImmediate(main);

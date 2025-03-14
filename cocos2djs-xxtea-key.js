@@ -18,12 +18,12 @@
  * 3. 查看输出：脚本运行后，控制台会输出捕获到的密钥。
  * 注意事项：
  * 1. 确保目标应用使用了 XXTEA 加密算法，并且密钥通过参数传递。
- * 2. 如果目标动态库名称或函数名称与脚本中的不一致，请自行修改 `TargetSoName` 和 `TargetFuncName`。
+ * 2. 如果目标动态库名称或函数名称与脚本中的不一致，请自行修改 `TARGET_LIB_NAME` 和 `TargetFuncName`。
  * 3. 本脚本仅用于学习和研究目的，请勿用于非法用途。
  */
 
 // 目标动态库名称
-var TargetSoName = "libcocos2djs.so";
+var TARGET_LIB_NAME = "libcocos2djs.so";
 
 // 目标函数名称
 var TargetFuncName = "xxtea_decrypt";
@@ -33,7 +33,7 @@ var TargetFuncName = "xxtea_decrypt";
  */
 function do_hook() {
     // 查找目标函数的地址
-    var addr = Module.findExportByName(TargetSoName, TargetFuncName);
+    var addr = Module.findExportByName(TARGET_LIB_NAME, TargetFuncName);
     console.log("找到目标函数地址:", addr);
 
     // 挂载目标函数
@@ -49,57 +49,28 @@ function do_hook() {
     });
 }
 
-/**
- * 加载目标动态库并进行 Hook
- */
-function load_so_and_hook() {
-    // 获取 dlopen 函数的地址
-    var dlopen = Module.findExportByName(null, "dlopen");
-    // 获取 android_dlopen_ext 函数的地址
-    var android_dlopen_ext = Module.findExportByName(null, "android_dlopen_ext");
 
-    // 挂载 dlopen 函数
-    Interceptor.attach(dlopen, {
-        onEnter: function (args) {
-            // 获取动态库路径的指针
-            var path_ptr = args[0];
-            // 将指针转换为字符串
-            var path = ptr(path_ptr).readCString();
-            // 保存路径
-            this.path = path;
-            console.log("[dlopen::onEnter] 尝试加载动态库:", path);
-        },
-        onLeave: function (retval) {
-            // 如果加载的动态库是我们关注的目标
-            if (this.path.indexOf(TargetSoName) !== -1) {
-                console.log("[dlopen::onLeave] 成功加载目标动态库:", this.path);
-                // 执行目标函数的 Hook
-                do_hook();
-            }
-        }
-    });
-
-    // 挂载 android_dlopen_ext 函数
-    Interceptor.attach(android_dlopen_ext, {
-        onEnter: function (args) {
-            // 获取动态库路径的指针
-            var path_ptr = args[0];
-            // 将指针转换为字符串
-            var path = ptr(path_ptr).readCString();
-            // 保存路径
-            this.path = path;
-            console.log("[android_dlopen_ext::onEnter] 尝试加载动态库:", path);
-        },
-        onLeave: function (retval) {
-            // 如果加载的动态库是我们关注的目标
-            if (this.path.indexOf(TargetSoName) !== -1) {
-                console.log("[android_dlopen_ext::onLeave] 成功加载目标动态库:", this.path);
-                // 执行目标函数的 Hook
-                do_hook();
-            }
+function hook_dlopen() {
+    ["android_dlopen_ext", "dlopen"].forEach(funcName => {
+        let addr = Module.findExportByName(null, funcName);
+        if (addr) {
+            Interceptor.attach(addr, {
+                onEnter(args) {
+                    let libName = ptr(args[0]).readCString();
+                    if (libName && libName.indexOf(TARGET_LIB_NAME) >= 0) {
+                        this.is_can_hook = true;
+                        console.log(`[+] ${funcName} onEnter: ${libName}`);
+                    }
+                },
+                onLeave: function (retval) {
+                    if (this.is_can_hook) {
+                        console.log(`[+] ${funcName} onLeave, start hook ${TargetFuncName} `);
+                        do_hook();
+                    }
+                }
+            });
         }
     });
 }
 
-// 执行加载动态库并 Hook 的逻辑
-load_so_and_hook();
+hook_dlopen();
