@@ -41,4 +41,4 @@ function printStack() {
   });
 }
 
-setImmediate(hook());
+hook();

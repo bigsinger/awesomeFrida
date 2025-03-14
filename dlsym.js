@@ -19,13 +19,13 @@ function load_so_load() {
 			var path = ptr(path_ptr).readCString();
 			// 保存路径
 			this.path = path;
-			console.log("[+] dlopen: ", path);
+			console.log("[+] dlopen onEnter: ", path);
 		},
 		onLeave: function (retval) {
 			if (retval.toInt32() !== 0) { // 确保加载成功
 				var baseAddr = ptr(retval);
 				libMap[baseAddr] = this.path;
-				console.log("[+] dlopen: " + this.path + " at " + baseAddr);
+				console.log("[+] dlopen onLeave: " + this.path + " at " + baseAddr);
 			}
 		}
 	});
@@ -39,13 +39,13 @@ function load_so_load() {
 			var path = ptr(path_ptr).readCString();
 			// 保存路径
 			this.path = path;
-			console.log("[+] android_dlopen_ext: ", path);
+			console.log("[+] android_dlopen_ext onEnter: ", path);
 		},
 		onLeave: function (retval) {
 			if (retval.toInt32() !== 0) { // 确保加载成功
 				var baseAddr = ptr(retval);
 				libMap[baseAddr] = this.path;
-				console.log("[+] android_dlopen_ext: " + this.path + " at " + baseAddr);
+				console.log("[+] android_dlopen_ext onLeave: " + this.path + " at " + baseAddr);
 			}
 		}
 	});
