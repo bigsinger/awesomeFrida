@@ -1,39 +1,173 @@
-说明：配合 [ADBGUI](https://github.com/bigsinger/adbgui)  工具，更加高效快捷。
+# awesomeFrida
 
+> Frida 实战脚本集 & 语法参考手册
+>
+> 配合 [ADBGUI](https://github.com/bigsinger/adbgui) 工具，更加高效快捷。
 
+---
+
+# 目录概览
+
+## 目录结构
+
+```
+awesomeFrida/
+├── README.md              ← 本文档（目录 + 语法参考）
+├── ssl-bypass/            HTTPS 证书校验绕过
+├── native/                Native 层 Hook（SO/JNI/ART）
+│   └── jni/               JNI 相关专项脚本
+├── java/                  Java 层 Hook
+├── stalker/               Stalker CPU 指令追踪
+└── app-specific/          特定 APP 专项分析脚本
+    └── bili/              哔哩哔哩专项
+```
+
+## 脚本索引
+
+### 🔐 SSL Pinning Bypass（`ssl-bypass/`）
+
+| 脚本 | 说明 |
+| :--- | :--- |
+| `byPassSSL.js` | 通用 SSL Pinning 绕过 |
+| `just_trust_me.js` | 知名 SSL 绕过脚本 |
+| `just_trust_me_okhttp_hook_finder.js` | just_trust_me 的 OkHttp Hook 定位 |
+| `r0capture.js` | r0capture 抓包工具脚本 |
+
+### ⚙️ Native 层 Hook（`native/`）
+
+| 脚本 | 说明 |
+| :--- | :--- |
+| `hook_RegisterNatives.js` | 拦截 RegisterNatives 获取注册的 native 函数 |
+| `JNI_OnLoad.js` | JNI_OnLoad 函数 Hook |
+| `init_array.js` | init_array 段 Hook |
+| `dlopen.js` | dlopen 调用 Hook |
+| `dlopen-replace.js` | dlopen 替换实现 |
+| `dlsym.js` | dlsym 符号查找 Hook |
+| `pthread_create.js` | pthread_create 线程创建 Hook |
+| `pthread_create-fake.js` | 伪造 pthread_create 返回 |
+| `pthread_create-replace-jni.js` | 替换 pthread_create 的 JNI 实现 |
+| `call_constructors.js` | 调用构造函数 Hook |
+| `System.loadLibrary.js` | System.loadLibrary 拦截 |
+| `System.loadLibrary-libmsaoaidsec.js` | 针对 libmsaoaidsec 的 loadLibrary 拦截 |
+| `clone.js` | 监控 clone 调用 + 子线程 SO 加载 |
+| `open.js` | Hook open 函数获取打开的文件名（针对 libmsaoaidsec.so） |
+| `BinderProxy.js` | BinderProxy Hook |
+| `dump-so.js` | SO 文件 Dump |
+| `dump_so.js` | SO 文件 Dump（另一版本） |
+
+**`native/jni/` 子目录：**
+
+| 脚本 | 说明 |
+| :--- | :--- |
+| `hook_art.js` | ART 运行时 Hook |
+| `hook_artmethod.js` | ART Method Hook |
+| `hook_RegisterNatives.js` | JNI RegisterNatives 拦截（JNI 版） |
+| `hook_RegisterNatives2.js` | JNI RegisterNatives 拦截（v2） |
+| `RegisterNatives.js` | RegisterNatives 信息展示 |
+| `jni.md` | JNI Hook 使用说明文档 |
+
+### ☕ Java 层 Hook（`java/`）
+
+| 脚本 | 说明 |
+| :--- | :--- |
+| `HashMap.js` | Hook HashMap.put 操作 |
+| `hook_okhttp3.js` | OkHttp3 网络请求 Hook |
+| `hook_reg.js` | 正则 Hook 辅助 |
+| `hookUrl.js` | URL 相关 Hook |
+| `javaEnc.js` | Java 加密方法追踪 |
+| `android-make-toast.js` | 主动弹出 Toast |
+| `webview-load-url.js` | 获取 WebView 加载的 URL |
+| `all_classes.js` | 枚举所有已加载的类 |
+| `loadClass.js` | 拦截类加载过程 |
+
+### 🔍 Stalker CPU 指令追踪（`stalker/`）
+
+| 脚本 | 说明 |
+| :--- | :--- |
+| `stalker.js` | Stalker 指令跟踪基础实现 |
+| `stalker-decode.js` | Stalker 解码分析 |
+| `stalker-template.js` | Stalker 模版框架 |
+
+### 📱 APP 专项分析（`app-specific/`）
+
+| 脚本 | 说明 |
+| :--- | :--- |
+| `byteDance.js` | 字节跳动系 APP 分析 |
+| `dygod.js` | 电影天堂 APP Hook |
+| `MT.js` | MT 相关 Hook（dlopen + 第三方库） |
+| `NIMClient.js` | 网易云信 IM 客户端 Hook |
+| `nimlibChatAttachParser.js` | 网易云信聊天附件解析 |
+| `360getString.js` | 360 加固字符串解密 |
+| `ZenTracer.js` | ZenTracer 方法调用追踪 |
+| `cn.zhilianda.photo.scanner.pro.js` | 照片扫描特定 APP Hook |
+| `cocos2djs-xxtea-key.js` | Cocos2d-js XXTEA 密钥提取 |
+| `privacy.js` | 隐私数据获取（Android ID 等） |
+| `replaceBaiduAPI_KEY.js` | 替换百度 API Key |
+| `replaceM3U8url.js` | 替换 M3U8 视频 URL |
+| `replaceInitProcAndPatch.js` | 替换初始化过程并 Patch |
+
+**`app-specific/bili/` 子目录（哔哩哔哩专项）：**
+
+| 脚本 | 说明 |
+| :--- | :--- |
+| `7.26.1.js` | BiliBili v7.26.1 分析脚本 |
+| `7.76.0.js` | BiliBili v7.76.0 分析脚本 |
+| `bypass_bilibili.js` | BiliBili 绕过脚本 |
+| `create_fake_pthread_create.js` | 伪造 BiliBili 的 pthread_create |
+| `hook_pthread_create-7.26.1.js` | v7.26.1 的 pthread_create Hook |
+| `replace_init_proc-7.26.1.js` | v7.26.1 初始化过程替换 |
+| `replace_init_proc-7.76.0.js` | v7.76.0 初始化过程替换 |
+
+---
 
 # 安装配置
+
+请确保已安装 Frida 及对应版本的 frida-server：
+
+```bash
+pip install frida-tools
+```
+
+将 frida-server 推送到 Android 设备并启动：
+
+```bash
+adb push frida-server /data/local/tmp/
+adb shell chmod 755 /data/local/tmp/frida-server
+adb shell /data/local/tmp/frida-server &
+```
 
 # 注入方式
 
 ```bash
-# spawn方式
+# spawn 方式：启动 APP 时注入
 frida -U --no-pause -f com.abc.xxx -l xxx.js
 
-# attach方式
+# attach 方式：附加到已运行的进程
 frida -U pid -l xxx.js
 ```
 
-
+---
 
 # 基础语法
 
-| API名称                                    | 描述                                           |
-| :----------------------------------------- | :--------------------------------------------- |
-| `Java.use(className)`                      | 获取指定的Java类并使其在JavaScript代码中可用。 |
-| `Java.perform(callback)`                   | 确保回调函数在Java的主线程上执行。             |
-| `Java.choose(className, callbacks)`        | 枚举指定类的所有实例。                         |
-| `Java.cast(obj, cls)`                      | 将一个Java对象转换成另一个Java类的实例。       |
-| `Java.enumerateLoadedClasses(callbacks)`   | 枚举进程中已经加载的所有Java类。               |
-| `Java.enumerateClassLoaders(callbacks)`    | 枚举进程中存在的所有Java类加载器。             |
-| `Java.enumerateMethods(targetClassMethod)` | 枚举指定类的所有方法。                         |
+## 核心 API
+
+| API 名称 | 描述 |
+| :--- | :--- |
+| `Java.use(className)` | 获取指定的 Java 类并使其在 JavaScript 代码中可用 |
+| `Java.perform(callback)` | 确保回调函数在 Java 的主线程上执行 |
+| `Java.choose(className, callbacks)` | 枚举指定类的所有实例 |
+| `Java.cast(obj, cls)` | 将一个 Java 对象转换成另一个 Java 类的实例 |
+| `Java.enumerateLoadedClasses(callbacks)` | 枚举进程中已经加载的所有 Java 类 |
+| `Java.enumerateClassLoaders(callbacks)` | 枚举进程中存在的所有 Java 类加载器 |
+| `Java.enumerateMethods(targetClassMethod)` | 枚举指定类的所有方法 |
 
 ## 日志输出
 
-| 日志方法        | 描述                                                | 说明                                                         |
-| :-------------- | :-------------------------------------------------- | :----------------------------------------------------------- |
-| `console.log()` | 使用JavaScript直接进行日志打印                      | 多用于在CLI模式中，`console.log()`直接输出到命令行界面，使用户可以实时查看。在RPC模式中，`console.log()`同样输出在命令行，但可能被Python脚本的输出内容掩盖。 |
-| `send()`        | Frida的专有方法，用于发送数据或日志到外部Python脚本 | 多用于RPC模式中，它允许JavaScript脚本发送数据到Python脚本，Python脚本可以进一步处理或记录这些数据。 |
+| 日志方法 | 描述 | 说明 |
+| :--- | :--- | :--- |
+| `console.log()` | 使用 JavaScript 直接进行日志打印 | 多用于 CLI 模式，`console.log()` 直接输出到命令行界面。在 RPC 模式中，输出同样在命令行，但可能被 Python 脚本的输出掩盖 |
+| `send()` | Frida 专有方法，发送数据/日志到外部 Python 脚本 | 多用于 RPC 模式，允许 JS 发送数据到 Python 脚本进一步处理 |
 
 ## 模板代码
 
@@ -46,21 +180,17 @@ function main(){
 setImmediate(main);
 ```
 
+---
 
+# Java 层常用代码
 
-# 常用代码
-
-## Java层
-
-### 打印堆栈
+## 打印堆栈
 
 ```js
 console.log(Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Throwable").$new()));//java打印堆栈
 
 console.log(' called from:\n' +Thread.backtrace(this.context, Backtracer.ACCURATE).map(DebugSymbol.fromAddress).join('\n') + '\n');//SO打印堆栈
 ```
-
-
 
 ```js
 // 打印jni函数参数
@@ -137,6 +267,8 @@ function main() {
 setImmediate(main)
 ```
 
+## 字节序列操作
+
 ### 字节序列转字符串
 
 ```js
@@ -162,9 +294,7 @@ function printDataHexStr(byteArr, size){
 }
 ```
 
-
-
-### 字节序列保存到文件
+### 保存数据到文件
 
 ```js
 // 字节序列保存到文件中
@@ -177,9 +307,7 @@ function save2File(filename, bytes){
 }
 ```
 
-
-
-### Java对象、byte[]输出
+### Java 对象、byte[] 输出
 
 ```js
 function jobj2Str(jobject) {
@@ -188,7 +316,7 @@ function jobj2Str(jobject) {
 }
 ```
 
-###  jstring、jbytearray 输出
+### jstring、jbytearray 输出
 
 ```js
 function jstring2Str(jstring) {
@@ -211,7 +339,7 @@ function jbyteArray2Array(jbyteArray) {
 }
 ```
 
-### base64编码
+### base64 编码
 
 ```js
 function byte2Base64(bytes) {
@@ -220,7 +348,9 @@ function byte2Base64(bytes) {
 }
 ```
 
-### HOOK base64
+## Hook 各类函数
+
+### HOOK Base64
 
 ```js
 function hookBase64() {
@@ -247,9 +377,7 @@ function hookHashMap() {
 }
 ```
 
-
-
-### HOOK构造函数
+### HOOK 构造函数
 
 ```js
 function hook(){
@@ -263,7 +391,7 @@ function hook(){
 }
 ```
 
-### HOOK所有重载函数
+### HOOK 所有重载函数
 
 ```js
 function hookAllOverloads(targetClass, targetMethod) {
@@ -282,7 +410,7 @@ function hookAllOverloads(targetClass, targetMethod) {
  }
 ```
 
-### HOOK内部类
+### HOOK 内部类
 
 ```js
 function hook(){
@@ -296,7 +424,7 @@ function hook(){
 }
 ```
 
-
+## 成员操作
 
 ### 修改成员变量
 
@@ -321,8 +449,6 @@ function hook(){
     });
 }
 ```
-
-
 
 ### 调用成员函数
 
@@ -350,6 +476,8 @@ function invoke(str){
 }
 ```
 
+## 类与方法枚举
+
 ### 获取动态加载的类
 
 ```js
@@ -360,8 +488,6 @@ cls.loadClass.overload('java.lang.String').implementation = function (name) {
     return result;
 }
 ```
-
-
 
 ### 获取所有加载的类
 
@@ -384,7 +510,7 @@ Java.enumerateLoadedClasses({
 
 ```
 
-###  获取类所有方法
+### 获取类所有方法
 
 ```js
 var cls = Java.use(targetClass);
@@ -407,18 +533,7 @@ for(var j=0; j < methods.length; j++){
 }
 ```
 
-### 保存数据到文件
-
-```js
-// 字节序列保存到文件中
-function save2File(filename, byteArr){
-	console.log("save file to: " + filename);
-	var file = new File(filename, "w");
-	file.write(byteArr);
-	file.flush();
-	file.close();
-}
-```
+## 辅助技巧
 
 ### 获取方法名
 
@@ -443,7 +558,7 @@ xx.yy.implementation = function() {
 }
 ```
 
-### 主动弹出Toast
+### 主动弹出 Toast
 
 ```js
 // 0 = // https://developer.android.com/reference/android/widget/Toast#LENGTH_LONG
@@ -453,9 +568,7 @@ Java.scheduleOnMainThread(() => {
 });
 ```
 
-
-
-### 获取Webview加载的URL
+### 获取 Webview 加载的 URL
 
 ```js
 Java.use("android.webkit.WebView").loadUrl.overload("java.lang.String").implementation = function (s) {
@@ -464,9 +577,11 @@ Java.use("android.webkit.WebView").loadUrl.overload("java.lang.String").implemen
 };
 ```
 
+---
 
+# Native 层常用代码
 
-## Native层
+## 文件操作 Hook
 
 ### fopen
 
@@ -487,7 +602,9 @@ Interceptor.attach(Module.findExportByName("libc.so" , "open"),{
 });
 ```
 
-### 拦截模块加载并hook
+## 模块加载拦截
+
+### 拦截模块加载并 hook
 
 ```js
 var android_dlopen_ext = Module.findExportByName(null, "android_dlopen_ext");
@@ -510,7 +627,7 @@ if(android_dlopen_ext != null){
 }
 ```
 
-### Hook模块中的函数
+### Hook 模块中的函数
 
 ```js
 //getFileData
@@ -525,7 +642,7 @@ Interceptor.attach(Module.findExportByName("libgame.so" , "_ZN7cocos2d11CCFileUt
 });
 ```
 
-
+## 模块信息查询
 
 ### 枚举进程模块列表
 
@@ -541,14 +658,24 @@ for(var i = 0; i < modules.length; i++) {
 }
 ```
 
-
-
 ### 获取模块基址
 
 ```js
 // 获取基地址
 var baseAddr = Module.findBaseAddress("libnative-lib.so")
 ```
+
+### 获取模块所有导出函数
+
+```js
+// 获取所有导出函数
+var symbols = Module.enumerateSymbolsSync("libart.so");
+symbols.forEach(function (item) {
+	console.log(JSON.stringify(item))
+})
+```
+
+## Lua 相关
 
 ### luaL_loadbuffer
 
@@ -593,19 +720,9 @@ function printDataHexStr(byteArr, size){
 }
 ```
 
+## 实时跟踪与内存操作
 
-
-### 获取模块所有导出函数
-
-```js
-// 获取所有导出函数
-var symbols = Module.enumerateSymbolsSync("libart.so");
-symbols.forEach(function (item) {
-	console.log(JSON.stringify(item))
-})
-```
-
-### 实时跟踪CPU指令
+### 实时跟踪 CPU 指令（Stalker）
 
 ```js
 // 实时跟踪cpu指令
@@ -625,22 +742,22 @@ events: {
     compile: false // 已编译的块: 对覆盖率很有用
   },
 
- onReceive: function (events) {
-   var parsedEvent = Stalker.parse(events);
-   //console.log("buring"+parsedEvent);
- },
+ onReceive: function (events) {
+   var parsedEvent = Stalker.parse(events);
+   //console.log("buring"+parsedEvent);
+ },
 
- transform: function (iterator) {
-   let instruction = iterator.next();
-   do {
-     console.log("instruction:"+instruction);
-     iterator.keep();
-   } while ((instruction = iterator.next()) !== null);
- }
+ transform: function (iterator) {
+   let instruction = iterator.next();
+   do {
+     console.log("instruction:"+instruction);
+     iterator.keep();
+   } while ((instruction = iterator.next()) !== null);
+ }
 })
 ```
 
-### DUMP数据
+### DUMP 数据
 
 ```js
 function dumpAddr(address, length) {
@@ -668,7 +785,7 @@ var bytes = Memory.readByteArray(addr, size)
 var size = Memory.readInt(addr);
 ```
 
-### DUMP so文件
+### DUMP SO 文件
 
 ```js
 function dump_so(so_name) {
@@ -695,10 +812,10 @@ function dump_so(so_name) {
 setImmediate(dump_so("libshield.so"))
 ```
 
-
+---
 
 # 参考
 
+- [ADBGUI](https://github.com/bigsinger/adbgui) — 配合本脚本集使用的桌面工具
 - https://github.com/lasting-yang/frida_hook_libart
 - https://github.com/hookmaster/frida-all-in-one
-
